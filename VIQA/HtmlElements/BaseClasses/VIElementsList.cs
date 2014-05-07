@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -19,13 +20,16 @@ namespace VIQA.HtmlElements
         private void SetViElement(FieldInfo viElement)
         {
             var instance = (VIElement) viElement.GetValue(this) ??
-                (VIElement)Activator.CreateInstance(viElement.FieldType);
+                (VIElement)Activator.CreateInstance(InterfacesMap(viElement.FieldType));
             var name = NameAttribute.GetName(viElement);
             if (!string.IsNullOrEmpty(name))
                 instance.Name = name;
             var locator = LocateAttribute.GetLocator(viElement);
             if (locator != null)
                 instance.Locator = locator;
+            var fillFromName = FillFromFieldAttribute.GetFieldName(viElement);
+            if (!string.IsNullOrEmpty(fillFromName))
+                instance.FillRule = data => data.GetFieldByName(fillFromName);
             if (_locator != null)
                 instance.Context = (Context != null)
                     ? new ByChained(Context, _locator)
@@ -34,6 +38,16 @@ namespace VIQA.HtmlElements
             if (clickReloadsPage != null)
                 instance.WithPageLoadAction = true;
             viElement.SetValue(this, instance);
+        }
+
+        private static Type InterfacesMap(Type fieldType)
+        {
+            if (!fieldType.IsInterface) return fieldType;
+            var listOfTypes = VIElement.InterfaceTypeMap.Where(el => fieldType == el.Key).ToList();
+            if (listOfTypes.Count() == 1)
+                return listOfTypes.First().Value;
+            VISite.Alerting.ThrowError("Unknown interface: " + fieldType);
+            return fieldType;
         }
 
         public List<FieldInfo> GetElements() { return GetElements<IVIElement>(); }
@@ -53,41 +67,84 @@ namespace VIQA.HtmlElements
             return o => new Func<T, object>(typeFillRule).Invoke((T) o);
         }
 
-        private Dictionary<string, ISetValue> _setValueElements;
-        public Dictionary<string, ISetValue> SetValueElements
+        private Dictionary<string, IHaveValue> _withValueElements;
+        public Dictionary<string, IHaveValue> WithValueElements
         {
-            get { return _setValueElements ?? (_setValueElements = 
-                GetElements<ISetValue>().Select(_ => (ISetValue)_.GetValue(this)).ToDictionary(_ => _.Name, _ => _)); }
+            get { return _withValueElements ?? (_withValueElements = 
+                GetElements<IHaveValue>().Select(_ => (IHaveValue)_.GetValue(this)).ToDictionary(_ => _.Name, _ => _)); }
         }
 
-        public void FillElements(Dictionary<ISetValue, Object> values)
+        public void FillElements(Dictionary<IHaveValue, Object> values)
         {
             FillElements(values.ToDictionary(_ => _.Key.Name, _ => _.Value));
         }
 
+        private string ObjToString(Object obj)
+        {
+            var objects = obj as IEnumerable<object>;
+            return objects != null 
+                ? string.Join(", ", objects.Select(el => el.ToString())) 
+                : obj.ToString();
+        }
+
         public void FillElements(Dictionary<string, Object> values)
         {
-            if (values.Keys.All(SetValueElements.ContainsKey))
-                values.Where(_ => _.Value != null).ForEach(pair => SetValueElements[pair.Key].SetValue(pair.Value));
+            var vals = values.ToDictionary(_ => _.Key, _ => ObjToString(_.Value));
+            VISite.Logger.Event("Fill elements: '" + Name + "'".LineBreak() + "With data: " + vals.Print());
+            if (values.Keys.All(WithValueElements.ContainsKey))
+                try
+                { values.Where(_ => _.Value != null).ForEach(pair => WithValueElements[pair.Key].SetValue(pair.Value)); }
+                catch (Exception ex) { VISite.Alerting.ThrowError("Error in FillElements. Exception: " + ex); }
             else
                 throw VISite.Alerting.ThrowError("Unknown Keys for Data form.".LineBreak() +
-                    "Possible:" + SetValueElements.Keys.Print().LineBreak() +
+                    "Possible:" + WithValueElements.Keys.Print().LineBreak() +
                     "Requested:" + values.Keys.Print());
         }
         
-        public void FillForm(Object data)
+        public void FillFrom(Object data)
         {
-            SetValueElements.Select(_ => _.Value).Where(_ => _.FillRule != null)
+            VISite.Logger.Event("Fill form: '" + Name + "'".LineBreak() + "With data: " + data);
+            WithValueElements.Select(_ => _.Value).Where(_ => _.FillRule != null)
                 .ForEach(element =>
                 {
                     try { element.SetValue(element.FillRule(data)); }
-                    catch { }
+                    catch (Exception ex) { VISite.Alerting.ThrowError("Error in FillFrom. Exception: " + ex); }
                 });
+        }
+
+        public bool CompareValuesWith(Object data, Func<string, string, bool> compareFunc = null)
+        {
+            VISite.Logger.Event("Check Form values: '" + Name + "'".LineBreak() + "With data: " + data);
+            var result = true;
+            var CompareFunc = compareFunc ?? VIElement.DefaultCompareFunc;
+            var elements = WithValueElements.Select(_ => _.Value).Where(_ => _.FillRule != null);
+            foreach (var element in elements) {
+                try
+                {
+                    var expected = element.FillRule(data);
+                    var expectedEnum = expected as IEnumerable<Object>;
+                    if (expectedEnum == null)
+                    {
+                        if (CompareFunc(element.Value, expected.ToString()))
+                            continue;
+                    }
+                    else
+                    {
+                        var expecctedList = expectedEnum.ToList();
+                        if (expecctedList.Count(el => element.Value.Contains(el.ToString())) == expecctedList.Count())
+                        continue;
+                    }
+                    result = false;
+                    break;
+                }
+                catch (Exception ex) { VISite.Alerting.ThrowError("Error in CompareValuesWith. Exception: " + ex); }
+            }
+            return result;
         }
 
         public void FillElement(string name, string value)
         {
-            SetValueElements[name].SetValue(value);
+            WithValueElements[name].SetValue(value);
         }
 
         public VIElementsList()

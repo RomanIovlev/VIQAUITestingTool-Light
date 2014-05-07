@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
@@ -45,7 +46,11 @@ namespace VIQA.HtmlElements
         
         #region Temp Settings
         private int? _waitTimeoutInSec = null;
-        public string TemplateId;
+        private string _templateId;
+        public string TemplateId
+        {
+            set { DropCache(); _templateId = value; }
+            private get { return _templateId;  }}
 
         private void ClearTempSettings()
         {
@@ -78,7 +83,7 @@ namespace VIQA.HtmlElements
         protected static Action PreviousClickAction = null;
         
         protected virtual string _typeName { get { return "Element type undefined"; } }
-        public string FullName { get { return (Name != null) ? (_typeName + " " + Name) : Name;} }
+        public string FullName { get { return Name ?? _typeName + " with undefiened Name";} }
 
         private IWebElement CheckWebElementIsUnique(ReadOnlyCollection<IWebElement> webElements)
         {
@@ -112,21 +117,31 @@ namespace VIQA.HtmlElements
         {
             get
             {
+                WebDriver.Manage().Timeouts().ImplicitlyWait(TimeSpan.FromSeconds(0));
                 var elements = WebDriver.FindElements(Locator);
+                WebDriver.Manage().Timeouts().ImplicitlyWait(TimeSpan.FromSeconds(Site.WebDriverTimeouts.WaitWebElementInSec));
                 return elements.Count != 0 && CheckWebElementIsUnique(elements).Displayed;
             }
         }
 
-        public int CashDropTimes;
+        public int CashDropTime;
 
         private void IsClearCashNeeded()
         {
             if (Site.UseCache) {
-                if (CashDropTimes == Site.CashDropTimes) return;
-                CashDropTimes = Site.CashDropTimes;
+                if (CashDropTime != Site.CashDropTimes) 
+                    DropCache();
+                return;
             }
             WebElement = null;
         }
+
+        private void DropCache()
+        {
+            CashDropTime = Site.CashDropTimes;
+            WebElement = null;
+        }
+
 
         public IWebElement GetWebElement()
         {
@@ -146,7 +161,7 @@ namespace VIQA.HtmlElements
                     VISite.Logger.Event("Used Click Previous action");
                 } catch {WaitWebElement(0);}
             }
-            ClearTempSettings();
+            //ClearTempSettings();
             return CheckWebElementIsUnique(FoundElements);
         }
 
@@ -162,7 +177,7 @@ namespace VIQA.HtmlElements
 
         public string DefaultLogMessage(string text)
         {
-            return text + string.Format(" (Name: {0}, Type: {1}, Locator: {2})", FullName, _typeName, Locator);
+            return text + string.Format(" (Name: '{0}', Type: '{1}', Locator: '{2}')", FullName, _typeName, Locator);
         }
 
         private Func<string, Func<Object>, Func<Object, string>, Object> _defaultViActionR
@@ -202,5 +217,17 @@ namespace VIQA.HtmlElements
         {
             DoViAction.Action.Invoke(this, logActionName, viAction);
         }
+
+        public static Dictionary<Type, Type> InterfaceTypeMap = new Dictionary<Type, Type>
+        {
+            { typeof(IButton), typeof(Button) },
+            { typeof(ICheckbox), typeof(Checkbox) },
+            { typeof(ICheckList), typeof(CheckList) },
+            { typeof(ILink), typeof(Link) },
+            { typeof(ITextField), typeof(TextField) },
+            { typeof(ITextArea), typeof(TextArea) },
+        };
+
+        public static Func<string, string, bool> DefaultCompareFunc = (a, e) => a == e;
     }
 }

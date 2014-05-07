@@ -7,13 +7,16 @@ using VIQA.HtmlElements.Interfaces;
 
 namespace VIQA.HtmlElements
 {
-    public class Selector<T> : ClickableText, ISelector where T : ClickableText
+    public class Selector<T> : ClickableText, ISelector where T : ClickableText, ISelected
     {
         public T ListElementTemplate;
 
         public T GetlistElement(string name)
         {
             ListElementTemplate.TemplateId = name;
+            ListElementTemplate.TextElement.TemplateId = name;
+            ListElementTemplate.Name = Name + " element with value: " + name;
+            ListElementTemplate.TextElement.Name = Name + " label with value: " + name;
             return ListElementTemplate;
         }
         
@@ -57,11 +60,18 @@ namespace VIQA.HtmlElements
 
         public VIAction<Func<Selector<T>, string, bool>> IsSelectedFunc =
             new VIAction<Func<Selector<T>, string, bool>>(
-                (selector, name) => selector.GetlistElement(name).GetWebElement().Selected);
+                (selector, name) => selector.GetlistElement(name).IsSelected());
         
         public Func<IWebDriver, List<string>> GetListOfValuesFunc;
-        
-        protected IEnumerable<string> GetAllValues { get { return GetListOfValuesFunc.Invoke(WebDriver); } } 
+
+        protected IEnumerable<string> GetAllValues
+        {
+            get
+            {
+                try { return GetListOfValuesFunc.Invoke(WebDriver); }
+                catch { throw new Exception("GetListOfValuesFunc not set for " + Name); }
+            }
+        }
 
         public List<string> GetListOfValues()
         {
@@ -79,9 +89,11 @@ namespace VIQA.HtmlElements
         public List<string> IsSelected()
         {
             return DoVIAction(Name + ". IsSelected", 
-                () => GetAllValues.Where(el => IsSelectedFunc.Action(this, el)).Select(el => GetElementLabelFunc.Action(this, el)).ToList(),
+                () => GetAllValues.Where(el => IsSelectedFunc.Action(this, el)).ToList(),
                 values => FullName + " have selected following values: " + values.Print());
         }
+
+        public virtual string Value { get { return IsSelected().Print(); } }
 
         public virtual void SetValue<T>(T value)
         {

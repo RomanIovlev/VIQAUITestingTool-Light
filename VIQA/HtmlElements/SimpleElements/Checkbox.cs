@@ -7,9 +7,11 @@ using VIQA.SiteClasses;
 
 namespace VIQA.HtmlElements
 {
-    public class Checkbox : ClickableText, ICheckbox
+    public class Checkbox : ClickableText, ICheckbox, ISelected
     {
         public VIElement CheckSignElement;
+
+        public string Value { get { return IsChecked().ToString(); } }
 
         //<input type="checkbox" name="vehicle" value="Bike" id="bike">
         //<label for="bike">I have a bike<br></label>
@@ -41,8 +43,6 @@ namespace VIQA.HtmlElements
         
         public Checkbox(string name, ElementId id) : base(name, By.CssSelector(CommonLocatorById(id.ToString())))
         {
-            //GetLabelFunc = txt => new TextElement(FullName + " label", CommonLabelLocator(id.ToString())).Label;
-            //IsSelectedFunc = DefaultIsSelectedFunc;
         }
 
 
@@ -50,7 +50,7 @@ namespace VIQA.HtmlElements
         {
             DoVIAction("Check Checkbox", () =>
             {
-                if (!IsSelectedFunc.Invoke())
+                if (!IsChecked())
                     Click();
             });
         }
@@ -58,14 +58,14 @@ namespace VIQA.HtmlElements
         {
             DoVIAction("Uncheck Checkbox", () =>
             {
-                if (IsSelectedFunc.Invoke())
+                if (IsChecked())
                     Click();
             });
         }
         public bool IsChecked()
         {
             return DoVIAction("IsChecked", 
-                () => IsSelectedFunc.Invoke(), 
+                () => IsSelectedFunc(), 
                 isChecked => "Checkbox is " + (isChecked ? "checked" : "unchecked"));
         }
 
@@ -81,6 +81,7 @@ namespace VIQA.HtmlElements
                 Uncheck();
         }
 
+        public bool IsSelected() { return IsChecked(); }
     }
 
     public class ElementId
