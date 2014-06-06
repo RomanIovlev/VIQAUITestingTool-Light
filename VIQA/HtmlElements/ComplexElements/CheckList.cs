@@ -8,7 +8,7 @@ using VIQA.SiteClasses;
 
 namespace VIQA.HtmlElements
 {
-    public class CheckList : Selector<Checkbox> , ICheckList
+    public class CheckList : Selector<Checkbox>, ICheckList
     {
         private const string CheckboxTemplate = "input[type=checkbox][id={0}]";
         protected override string _typeName { get { return "Checkboxes"; } }
@@ -24,13 +24,13 @@ namespace VIQA.HtmlElements
         public void CheckGroup(params string[] values)
         {
             DoVIAction("Check Group: " + values.Print(),
-                () => values.ForEach(val => GetVIElement(val).Check()));
+                () => values.ForEach(val => GetVIElementByName(val).Check()));
         }
 
         public void UncheckGroup(params string[] values)
         {
             DoVIAction("Uncheck Group: " + values.Print(),
-                () => values.ForEach(val => GetVIElement(val).Uncheck()));
+                () => values.ForEach(val => GetVIElementByName(val).Uncheck()));
         }
 
         public Action<List<Checkbox>> ClearAction;
@@ -63,13 +63,13 @@ namespace VIQA.HtmlElements
         public List<string> GetListOfChecked()
         {
             return DoVIAction("GetListOfChecked elements",
-                IsSelected, result => "Checkboxes list. GetListOfChecked elements: " + result.Print());
+                () => SelectedItems, result => "Checkboxes list. GetListOfChecked elements: " + result.Print());
         }
 
         public List<string> GetListOfNotChecked()
         {
             return DoVIAction("GetListOfChecked elements",
-                () => ListOfValues.Except(IsSelected()).ToList(), result => "Checkboxes list. GetListOfNotChecked elements: " + result.Print());
+                () => ListOfValues.Except(SelectedItems).ToList(), result => "Checkboxes list. GetListOfNotChecked elements: " + result.Print());
         }
 
         public override void SetValue<T>(T value)
