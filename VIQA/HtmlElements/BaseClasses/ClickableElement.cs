@@ -56,8 +56,6 @@ namespace VIQA.HtmlElements
             }); 
             if (!clicked)
                 throw VISite.Alerting.ThrowError(DefaultLogMessage("Failed to click element"));
-
         }
-        
     }
 }
